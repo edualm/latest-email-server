@@ -8,6 +8,7 @@ Type=simple
 User=your-user
 Group=your-group
 WorkingDirectory=/opt/latest-email-server
+ExecStartPre=/path/to/go build -o app .
 ExecStart=/opt/latest-email-server/latest-email-server
 Restart=always
 RestartSec=5
