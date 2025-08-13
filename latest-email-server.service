@@ -7,28 +7,19 @@ Wants=network.target
 Type=simple
 User=your-user
 Group=your-group
-WorkingDirectory=/opt/latest-email-server
+WorkingDirectory=/path/to/latest-email-server
 ExecStartPre=/path/to/go build -o app .
-ExecStart=/opt/latest-email-server/latest-email-server
+ExecStart=/path/to/latest-email-server/latest-email-server
 Restart=always
 RestartSec=5
 
 # Security settings
 NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/opt/latest-email-server
-PrivateTmp=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
-RestrictNamespaces=true
-LockPersonality=true
-MemoryDenyWriteExecute=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
-RemoveIPC=true
-PrivateMounts=true
 
 # Logging
 StandardOutput=journal
