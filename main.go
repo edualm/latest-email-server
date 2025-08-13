@@ -40,6 +40,63 @@ func loadConfig() error {
 	return nil
 }
 
+func addMetadataBox(htmlContent string, msg *imapclient.FetchMessageBuffer) string {
+	// Extract metadata
+	var fromAddr string
+	if len(msg.Envelope.From) > 0 {
+		if msg.Envelope.From[0].Name != "" {
+			fromAddr = msg.Envelope.From[0].Name + " <" + msg.Envelope.From[0].Mailbox + "@" + msg.Envelope.From[0].Host + ">"
+		} else {
+			fromAddr = msg.Envelope.From[0].Mailbox + "@" + msg.Envelope.From[0].Host
+		}
+	}
+
+	subject := msg.Envelope.Subject
+	date := msg.Envelope.Date.Format("2006-01-02 15:04:05")
+
+	// Create metadata box HTML
+	metadataBox := fmt.Sprintf(`
+	<div style="
+		background-color: #f5f5f5;
+		border: 1px solid #ddd;
+		border-radius: 5px;
+		padding: 15px;
+		margin: 10px;
+		font-family: Arial, sans-serif;
+		font-size: 14px;
+		color: #333;
+		box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+	">
+		<div style="margin-bottom: 5px;"><strong>From:</strong> %s</div>
+		<div style="margin-bottom: 5px;"><strong>Subject:</strong> %s</div>
+		<div style="margin-bottom: 0;"><strong>Date:</strong> %s</div>
+	</div>
+	`, fromAddr, subject, date)
+
+	// Find the body tag and insert metadata box after it
+	bodyStart := strings.Index(htmlContent, "<body")
+	if bodyStart != -1 {
+		bodyTagEnd := strings.Index(htmlContent[bodyStart:], ">")
+		if bodyTagEnd != -1 {
+			insertPoint := bodyStart + bodyTagEnd + 1
+			return htmlContent[:insertPoint] + metadataBox + htmlContent[insertPoint:]
+		}
+	}
+
+	// If no body tag found, insert after html tag
+	htmlStart := strings.Index(htmlContent, "<html")
+	if htmlStart != -1 {
+		htmlTagEnd := strings.Index(htmlContent[htmlStart:], ">")
+		if htmlTagEnd != -1 {
+			insertPoint := htmlStart + htmlTagEnd + 1
+			return htmlContent[:insertPoint] + metadataBox + htmlContent[insertPoint:]
+		}
+	}
+
+	// If no html or body tags, just prepend the metadata box
+	return metadataBox + htmlContent
+}
+
 func getLatestEmail() (string, error) {
 	options := &imapclient.Options{
 		TLSConfig: &tls.Config{},
@@ -90,13 +147,13 @@ func getLatestEmail() (string, error) {
 		if msg.Envelope.From[0].Name != "" {
 			fromAddr = msg.Envelope.From[0].Name + " <"
 		}
-		fromAddr += msg.Envelope.From[0].Name + "@" + msg.Envelope.From[0].Host
+		fromAddr += msg.Envelope.From[0].Mailbox + "@" + msg.Envelope.From[0].Host
 		if msg.Envelope.From[0].Name != "" {
 			fromAddr += ">"
 		}
 		content.WriteString(fmt.Sprintf("From: %s\n", fromAddr))
 	}
-	
+
 	content.WriteString(fmt.Sprintf("Subject: %s\n", msg.Envelope.Subject))
 	content.WriteString(fmt.Sprintf("Date: %s\n\n", msg.Envelope.Date.Format("2006-01-02 15:04:05")))
 
@@ -113,20 +170,22 @@ func getLatestEmail() (string, error) {
 		if htmlStart == -1 {
 			htmlStart = strings.Index(rawContent, "<html")
 		}
-		
+
 		if htmlStart != -1 {
 			htmlContent := rawContent[htmlStart:]
-			
+
 			// Find the end of the HTML content (</html> tag)
 			htmlEnd := strings.LastIndex(htmlContent, "</html>")
 			if htmlEnd != -1 {
 				htmlContent = htmlContent[:htmlEnd+7] // include </html>
 			}
-			
+
 			// Decode quoted-printable encoding properly
 			reader := quotedprintable.NewReader(strings.NewReader(htmlContent))
 			decodedBytes := make([]byte, len(htmlContent)*2) // allocate extra space
 			n, err := reader.Read(decodedBytes)
+
+			var finalHTML string
 			if err != nil && n == 0 {
 				// If quoted-printable decoding fails, fall back to manual replacement
 				htmlContent = regexp.MustCompile(`=\r?\n`).ReplaceAllString(htmlContent, "")
@@ -135,7 +194,7 @@ func getLatestEmail() (string, error) {
 				htmlContent = strings.ReplaceAll(htmlContent, "=E2=80=99", "'")
 				htmlContent = strings.ReplaceAll(htmlContent, "=E2=80=93", "–")
 				htmlContent = strings.ReplaceAll(htmlContent, "=E2=80=94", "—")
-				return htmlContent, nil
+				finalHTML = htmlContent
 			} else {
 				decodedHTML := string(decodedBytes[:n])
 				// Also clean up the decoded content
@@ -143,8 +202,11 @@ func getLatestEmail() (string, error) {
 				if htmlEnd != -1 {
 					decodedHTML = decodedHTML[:htmlEnd+7] // include </html>
 				}
-				return decodedHTML, nil
+				finalHTML = decodedHTML
 			}
+
+			// Add metadata box at the top of the HTML
+			return addMetadataBox(finalHTML, msg), nil
 		}
 	}
 
@@ -176,7 +238,7 @@ func main() {
 	}
 
 	http.HandleFunc("/", emailHandler)
-	
+
 	log.Printf("Server starting on port %s", config.ListenPort)
 	log.Fatal(http.ListenAndServe(":"+config.ListenPort, nil))
 }
