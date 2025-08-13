@@ -1,0 +1,38 @@
+[Unit]
+Description=Latest Email Server
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=your-user
+Group=your-group
+WorkingDirectory=/opt/latest-email-server
+ExecStart=/opt/latest-email-server/latest-email-server
+Restart=always
+RestartSec=5
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/latest-email-server
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+PrivateMounts=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=latest-email-server
+
+[Install]
+WantedBy=multi-user.target
